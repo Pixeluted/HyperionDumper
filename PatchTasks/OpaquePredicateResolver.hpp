@@ -11,13 +11,13 @@ struct StackOpaquePredicateData {
 
     std::shared_ptr<DecodedInstruction> moveValueToStackInstruction;
     int64_t stackOffset;
-    int64_t stackValue;
+    uint64_t stackValue;
 
     std::shared_ptr<DecodedInstruction> moveStackValueToRegisterInstruction;
     ZydisRegister firstCompareRegister;
 
     std::shared_ptr<DecodedInstruction> compareInstruction;
-    int64_t comparedAgainst;
+    uint64_t comparedAgainst;
 
     std::shared_ptr<DecodedInstruction> jumpInstruction;
 };

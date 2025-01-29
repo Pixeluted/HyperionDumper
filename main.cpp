@@ -61,6 +61,11 @@ int main() {
             AnalyzeInstructionForOpaquePredicates(instruction);
         }, dumperInfo);
 
-    spdlog::info("Found {0} instructions", instructionsCount);
+    std::ofstream file("dump.bin", std::ios::binary);
+    file.write(reinterpret_cast<const char*>(dumpResults.ImageBuffer.get()), dumpResults.ImageSize);
+    file.close();
+
+    spdlog::info("Wrote to dump.bin");
+
     return 0;
 }

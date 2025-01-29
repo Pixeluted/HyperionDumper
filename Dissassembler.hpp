@@ -12,7 +12,9 @@
 struct DecodedInstruction {
     std::shared_ptr<ZydisDecodedInstruction> instruction;
     std::shared_ptr<ZydisDecodedOperand[ZYDIS_MAX_OPERAND_COUNT]> operands;
+    DumperInfo* dumpInfo;
     uintptr_t offsetFromDllBase;
+    uintptr_t offsetFromBuffer;
     uintptr_t originalMemoryAddress;
 };
 
@@ -37,7 +39,7 @@ public:
      */
     template<typename T>
     void DissassembleInstructions(const uintptr_t bufferAddress, const size_t bufferSize, T perInstructionCallback,
-                                  const DumperInfo &dumperInfo) {
+                                   DumperInfo &dumperInfo) {
         size_t currentBufferOffset = 0;
         ZydisDecodedInstruction currentInstruction;
         ZydisDecodedOperand currentOperands[ZYDIS_MAX_OPERAND_COUNT];
@@ -52,12 +54,14 @@ public:
                 auto fullInstruction = std::make_shared<DecodedInstruction>();
                 fullInstruction->instruction = std::make_shared<ZydisDecodedInstruction>(currentInstruction);
                 fullInstruction->operands = std::make_shared_for_overwrite<ZydisDecodedOperand[10]>();
+                fullInstruction->dumpInfo = &dumperInfo;
                 fullInstruction->offsetFromDllBase =
                         (dumperInfo
                          .DumpInfo->DllBase + dumperInfo.DumpInfo->CodeSectionInfo.codeSectionStartOffset +
                          currentBufferOffset) - dumperInfo
                         .DumpInfo->DllBase;
                 fullInstruction->originalMemoryAddress = dumperInfo.DumpInfo->DllBase + fullInstruction->offsetFromDllBase;
+                fullInstruction->offsetFromBuffer = currentBufferOffset;
 
                 memcpy(fullInstruction->operands.get(), currentOperands,
                        sizeof(ZydisDecodedOperand) * ZYDIS_MAX_OPERAND_COUNT);
