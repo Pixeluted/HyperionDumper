@@ -9,7 +9,17 @@
 bool IsMoveImmediateValueToStackInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_MOV &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-           instruction->operands[0].mem.base == ZYDIS_REGISTER_RSP &&
+           (instruction->operands[0].mem.base == ZYDIS_REGISTER_RSP ||
+            instruction->operands[0].mem.base == ZYDIS_REGISTER_RBP) &&
+           instruction->operands[0].mem.disp.value != 0 &&
+           instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
+}
+
+bool IsTestValueInStackByImmediateValueInstruction(const std::shared_ptr<DecodedInstruction> &instruction,
+                                                   const StackOpaqueAnalyzerState &analyzerState) {
+    return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_TEST &&
+           instruction->operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+           instruction->operands[0].mem.base == analyzerState.moveValueToStackInstruction->operands[0].mem.base &&
            instruction->operands[0].mem.disp.value != 0 &&
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
 }
@@ -19,7 +29,8 @@ bool IsMoveStackValueToRegisterInstruction(const std::shared_ptr<DecodedInstruct
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_MOV &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
-           instruction->operands[1].mem.base == ZYDIS_REGISTER_RSP &&
+           (instruction->operands[1].mem.base == ZYDIS_REGISTER_RSP ||
+            instruction->operands[1].mem.base == ZYDIS_REGISTER_RBP) &&
            instruction->operands[1].mem.disp.value == analyzerState.stackOffset;
 }
 
@@ -49,9 +60,7 @@ bool WillStackOpaquePredicateJump(const StackOpaqueAnalyzerState &analyzerState)
     switch (analyzerState.jumpInstruction->instruction->mnemonic) {
         case ZYDIS_MNEMONIC_JZ:
             if (analyzerState.compareInstruction->instruction->mnemonic == ZYDIS_MNEMONIC_TEST) {
-                if (analyzerState.comparedAgainst == 1) {
-                    return (analyzerState.stackValue & 1) == 0;
-                }
+                return (analyzerState.stackValue & analyzerState.comparedAgainst) == 0;
             }
             return analyzerState.stackValue == analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JNZ:
@@ -155,6 +164,16 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                     return MatcherResult{false};
                 }
             },
+            {
+                1, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsTestValueInStackByImmediateValueInstruction(instruction, analyzerState)) {
+                        analyzerState.compareInstruction = instruction;
+                        analyzerState.comparedAgainst = instruction->operands[1].imm.value.u;
+                        return MatcherResult{true, 3}; // There is then jump instruction, we need to jump there
+                    }
+                    return MatcherResult{false};
+                }
+            },
 
             {
                 2, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
@@ -184,7 +203,7 @@ StackOpaqueAnalyzer::getPatterns() const {
 }
 
 size_t StackOpaqueAnalyzer::getPatternsCount() const {
-    return 3;
+    return 4;
 }
 
 size_t StackOpaqueAnalyzer::getFinalProgress() const {
