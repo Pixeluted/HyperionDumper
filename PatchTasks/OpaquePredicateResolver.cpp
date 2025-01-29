@@ -6,8 +6,6 @@
 
 #include <spdlog/spdlog.h>
 
-static auto stackOpaquePredicateData = StackOpaquePredicateData{};
-
 bool IsMoveImmediateValueToStackInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_MOV &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
@@ -16,18 +14,20 @@ bool IsMoveImmediateValueToStackInstruction(const std::shared_ptr<DecodedInstruc
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
 }
 
-bool IsMoveStackValueToRegisterInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
+bool IsMoveStackValueToRegisterInstruction(const std::shared_ptr<DecodedInstruction> &instruction,
+                                           const StackOpaqueAnalyzerState &analyzerState) {
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_MOV &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
            instruction->operands[1].mem.base == ZYDIS_REGISTER_RSP &&
-           instruction->operands[1].mem.disp.value == stackOpaquePredicateData.stackOffset;
+           instruction->operands[1].mem.disp.value == analyzerState.stackOffset;
 }
 
-bool IsCompareValuesInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
+bool IsCompareValuesInstruction(const std::shared_ptr<DecodedInstruction> &instruction,
+                                const StackOpaqueAnalyzerState &analyzerState) {
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_CMP &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
-           instruction->operands[0].reg.value == stackOpaquePredicateData.firstCompareRegister &&
+           instruction->operands[0].reg.value == analyzerState.firstCompareRegister &&
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
 }
 
@@ -45,39 +45,33 @@ bool IsJumpInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
     }
 }
 
-bool WillStackOpaquePredicateJump() {
-    if (stackOpaquePredicateData.currentProgress != 4)
-        return false;
-
-    switch (stackOpaquePredicateData.jumpInstruction->instruction->mnemonic) {
+bool WillStackOpaquePredicateJump(const StackOpaqueAnalyzerState &analyzerState) {
+    switch (analyzerState.jumpInstruction->instruction->mnemonic) {
         case ZYDIS_MNEMONIC_JZ:
-            return stackOpaquePredicateData.stackValue == stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue == analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JNZ:
-            return stackOpaquePredicateData.stackValue != stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue != analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JNBE:
-            return stackOpaquePredicateData.stackValue > stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue > analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JNB:
-            return stackOpaquePredicateData.stackValue >= stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue >= analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JB:
-            return stackOpaquePredicateData.stackValue < stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue < analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JBE:
-            return stackOpaquePredicateData.stackValue <= stackOpaquePredicateData.comparedAgainst;
+            return analyzerState.stackValue <= analyzerState.comparedAgainst;
         default:
             return false;
     }
 }
 
-void ResolveStackOpaquePredicate() {
-    if (stackOpaquePredicateData.currentProgress != 4)
-        return;
+void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) {
+    const auto originalLength = analyzerState.jumpInstruction->instruction->length;
 
-    const auto originalLength = stackOpaquePredicateData.jumpInstruction->instruction->length;
-
-    const auto willJump = WillStackOpaquePredicateJump();
+    const auto willJump = WillStackOpaquePredicateJump(analyzerState);
     if (willJump) {
-        const auto targetAddress = stackOpaquePredicateData.jumpInstruction->operands[0];
-        const auto buffer = stackOpaquePredicateData.jumpInstruction->dumpInfo->DumpInfo->ImageBuffer.get() +
-                            stackOpaquePredicateData.jumpInstruction->offsetFromDllBase;
+        const auto targetAddress = analyzerState.jumpInstruction->operands[0];
+        const auto buffer = analyzerState.jumpInstruction->dumpInfo->DumpInfo->ImageBuffer.get() +
+                            analyzerState.jumpInstruction->offsetFromDllBase;
 
         if (targetAddress.type == ZYDIS_OPERAND_TYPE_IMMEDIATE) {
             if (targetAddress.size == 8) {
@@ -88,7 +82,7 @@ void ResolveStackOpaquePredicate() {
                 memcpy(buffer, newJump, sizeof(newJump));
 
                 spdlog::info("Resolved opaque predicate at 0x{0:x} with short relative jump patch!",
-                             stackOpaquePredicateData.jumpInstruction->offsetFromDllBase);
+                             analyzerState.jumpInstruction->offsetFromDllBase);
             } else if (targetAddress.size == 32) {
                 memset(buffer, 0x90, originalLength);
                 const uint8_t newJump[] = {
@@ -101,7 +95,7 @@ void ResolveStackOpaquePredicate() {
                 memcpy(buffer, newJump, sizeof(newJump));
 
                 spdlog::info("Resolved opaque predicate at 0x{0:x} with near relative jump patch!",
-                             stackOpaquePredicateData.jumpInstruction->offsetFromDllBase);
+                             analyzerState.jumpInstruction->offsetFromDllBase);
             } else if (targetAddress.size == 64) {
                 memset(buffer, 0x90, originalLength);
                 const uint8_t newJump[] = {
@@ -118,79 +112,81 @@ void ResolveStackOpaquePredicate() {
                 memcpy(buffer, newJump, sizeof(newJump));
 
                 spdlog::info("Resolved opaque predicate at 0x{0:x} with absolute jump patch!",
-                             stackOpaquePredicateData.jumpInstruction->offsetFromDllBase);
+                             analyzerState.jumpInstruction->offsetFromDllBase);
             }
         }
     } else {
         memset(
-            stackOpaquePredicateData.jumpInstruction->dumpInfo->DumpInfo->ImageBuffer.get() +
-            stackOpaquePredicateData.jumpInstruction->offsetFromDllBase, 0x90,
+            analyzerState.jumpInstruction->dumpInfo->DumpInfo->ImageBuffer.get() +
+            analyzerState.jumpInstruction->offsetFromDllBase, 0x90,
             originalLength);
         spdlog::info("Resolved opaque predicate at 0x{0:x} by nopping out the jump!",
-                     stackOpaquePredicateData.jumpInstruction->offsetFromDllBase);
+                     analyzerState.jumpInstruction->offsetFromDllBase);
     }
 }
 
-void StackOpaquePredicateAnalyzor(const std::shared_ptr<DecodedInstruction> &instruction,
-                                  const bool isRecheck = false) {
-    if (stackOpaquePredicateData.currentProgress == 0 &&
-        IsMoveImmediateValueToStackInstruction(instruction)) {
-        stackOpaquePredicateData.moveValueToStackInstruction = instruction;
-        stackOpaquePredicateData.stackOffset = instruction->operands[0].mem.disp.value;
-        stackOpaquePredicateData.stackValue = instruction->operands[1].imm.value.u;
-        stackOpaquePredicateData.currentProgress = 1;
-        return;
-    }
+static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::PatternMatcher> stackOpaqueAnalyzerPatterns[]
+        = {
+            {
+                0, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsMoveImmediateValueToStackInstruction(instruction)) {
+                        analyzerState.moveValueToStackInstruction = instruction;
+                        analyzerState.stackOffset = instruction->operands[0].mem.disp.value;
+                        analyzerState.stackValue = instruction->operands[1].imm.value.u;
+                        return true;
+                    }
 
-    if (stackOpaquePredicateData.currentProgress == 1) {
-        if (IsMoveStackValueToRegisterInstruction(instruction)) {
-            stackOpaquePredicateData.moveStackValueToRegisterInstruction = instruction;
-            stackOpaquePredicateData.firstCompareRegister = instruction->operands[0].reg.value;
-            stackOpaquePredicateData.currentProgress = 2;
-            return;
-        } else {
-            stackOpaquePredicateData.currentProgress = 0;
-            if (isRecheck == false) {
-                StackOpaquePredicateAnalyzor(instruction, true);
-            }
-        }
-    }
+                    return false;
+                }
+            },
 
-    if (stackOpaquePredicateData.currentProgress == 2) {
-        if (IsCompareValuesInstruction(instruction)) {
-            stackOpaquePredicateData.compareInstruction = instruction;
-            stackOpaquePredicateData.comparedAgainst = instruction->operands[1].imm.value.u;
-            stackOpaquePredicateData.currentProgress = 3;
-            return;
-        } else {
-            stackOpaquePredicateData.currentProgress = 0;
-            if (isRecheck == false) {
-                StackOpaquePredicateAnalyzor(instruction, true);
-            }
-            return;
-        }
-    }
+            {
+                1, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsMoveStackValueToRegisterInstruction(instruction, analyzerState)) {
+                        analyzerState.moveStackValueToRegisterInstruction = instruction;
+                        analyzerState.firstCompareRegister = instruction->operands[0].reg.value;
+                        return true;
+                    }
+                    return false;
+                }
+            },
 
-    if (stackOpaquePredicateData.currentProgress == 3) {
-        if (IsJumpInstruction(instruction)) {
-            stackOpaquePredicateData.jumpInstruction = instruction;
-            stackOpaquePredicateData.currentProgress = 4;
-            return;
-        } else {
-            stackOpaquePredicateData.currentProgress = 0;
-            if (isRecheck == false) {
-                StackOpaquePredicateAnalyzor(instruction, true);
-            }
-            return;
-        }
-    }
+            {
+                2, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsCompareValuesInstruction(instruction, analyzerState)) {
+                        analyzerState.compareInstruction = instruction;
+                        analyzerState.comparedAgainst = instruction->operands[1].imm.value.u;
+                        return true;
+                    }
+                    return false;
+                }
+            },
 
-    if (stackOpaquePredicateData.currentProgress == 4) {
-        ResolveStackOpaquePredicate();
-        stackOpaquePredicateData.currentProgress = 0;
-    }
+            {
+                3, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsJumpInstruction(instruction)) {
+                        analyzerState.jumpInstruction = instruction;
+                        return true;
+                    }
+                    return false;
+                }
+            },
+        };
+
+const std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::PatternMatcher> *
+StackOpaqueAnalyzer::getPatterns() const {
+    return stackOpaqueAnalyzerPatterns;
 }
 
+size_t StackOpaqueAnalyzer::getPatternsCount() const {
+    return 3;
+}
+
+void StackOpaqueAnalyzer::onPatternMatched() {
+    ResolveStackOpaquePredicate(currentAnalyzerState);
+}
+
+static auto stackOpaqueAnalyzer = StackOpaqueAnalyzer();
 void AnalyzeInstructionForOpaquePredicates(const std::shared_ptr<DecodedInstruction> &instruction) {
-    StackOpaquePredicateAnalyzor(instruction);
+    stackOpaqueAnalyzer.analyzeInstruction(instruction);
 }

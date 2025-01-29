@@ -4,10 +4,11 @@
 #pragma once
 #include <memory>
 #include "../Dissassembler.hpp"
+#include "../PatternAnalyzer.hpp"
 
 // Structure data for the opaque predicate when a value is moved to stack and then immediately compared with another immediate value
-struct StackOpaquePredicateData {
-    uint16_t currentProgress = 0;
+struct StackOpaqueAnalyzerState : BaseAnalyzerState {
+    int currentProgress = 0;
 
     std::shared_ptr<DecodedInstruction> moveValueToStackInstruction;
     int64_t stackOffset;
@@ -20,6 +21,13 @@ struct StackOpaquePredicateData {
     uint64_t comparedAgainst;
 
     std::shared_ptr<DecodedInstruction> jumpInstruction;
+};
+
+class StackOpaqueAnalyzer : public PatternAnalyzer<StackOpaqueAnalyzerState> {
+
+    [[nodiscard]] size_t getPatternsCount() const override;
+    [[nodiscard]] const std::pair<int, PatternMatcher> *getPatterns() const override;
+    void onPatternMatched() override;
 };
 
 void AnalyzeInstructionForOpaquePredicates(const std::shared_ptr<DecodedInstruction> &instruction);

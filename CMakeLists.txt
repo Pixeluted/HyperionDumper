@@ -11,7 +11,9 @@ add_executable(${PROJECT_NAME} main.cpp
         Dissassembler.cpp
         Dissassembler.hpp
         PatchTasks/OpaquePredicateResolver.cpp
-        PatchTasks/OpaquePredicateResolver.hpp)
+        PatchTasks/OpaquePredicateResolver.hpp
+        PatternAnalyzer.cpp
+        PatternAnalyzer.hpp)
 
 option(ZYDIS_BUILD_TOOLS "" OFF)
 option(ZYDIS_BUILD_EXAMPLES "" OFF)
