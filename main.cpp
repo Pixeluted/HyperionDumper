@@ -3,9 +3,9 @@
 #include <psapi.h>
 #include <optional>
 #include <TlHelp32.h>
-#include <capstone/capstone.h>
 #include <spdlog/spdlog.h>
 
+#include "Dissassembler.hpp"
 #include "Dumper.hpp"
 #include "PEDumper.hpp"
 
@@ -30,15 +30,6 @@ std::optional<HANDLE> GetProcessHandleByName(const std::string &processName) {
     return std::nullopt;
 }
 
-uint64_t resolveRIPRelativeAddress(const cs_insn *instruction) {
-    const int64_t displacement = instruction->detail->x86.operands[1].mem.disp;
-    const uint64_t nextInstructionAddr = instruction->address + instruction->size;
-    const uint64_t targetAddress = nextInstructionAddr + displacement;
-
-    return targetAddress;
-}
-
-
 
 int main() {
     spdlog::set_pattern("[%^%l%$] %v");
@@ -60,29 +51,14 @@ int main() {
     dumperInfo.DumpInfo = &dumpResults;
     dumperInfo.RobloxHandle = robloxHandle;
 
-    csh CapstoneHandle;
-    if (cs_open(CS_ARCH_X86, CS_MODE_64, &CapstoneHandle) != CS_ERR_OK) {
-        spdlog::error("Failed to initialize capstone handle!");
-        return -1;
-    }
-    dumperInfo.CapstoneHandle = &CapstoneHandle;
+    const auto disassembler = Dissassembler::GetSingleton();
+    size_t instructionsCount = 0;
+    disassembler->DissassembleInstructions(
+        reinterpret_cast<uintptr_t>(dumpResults.ImageBuffer.get() + dumpResults.CodeSectionInfo.codeSectionStartOffset),
+        dumpResults.CodeSectionInfo.codeSectionSize, [&disassembler, &instructionsCount](const DecodedInstruction& instruction, const uintptr_t runtimeAddress) {
+            instructionsCount += 1;
+        }, dumpResults.DllBase + dumpResults.CodeSectionInfo.codeSectionStartOffset);
 
-    cs_option(CapstoneHandle, CS_OPT_SKIPDATA, CS_OPT_ON);
-
-    cs_insn *disassembledInstructions;
-    const auto instructionsCount = cs_disasm(CapstoneHandle,
-                                             dumpResults.ImageBuffer.get() + dumpResults.CodeSectionInfo.
-                                             codeSectionStartOffset,
-                                             dumpResults.CodeSectionInfo.codeSectionSize,
-                                             dumpResults.DllBase + dumpResults.CodeSectionInfo.codeSectionStartOffset,
-                                             0, &disassembledInstructions);
-    cs_option(CapstoneHandle, CS_OPT_SKIPDATA, CS_OPT_OFF);
-
-    dumperInfo.DisassembledInstructions = disassembledInstructions;
-    dumperInfo.DisassembledInstructionsCount = instructionsCount;
-
-    spdlog::info("Successfully disassembled {} instructions!", instructionsCount);
-
+    spdlog::info("Found {0} instructions", instructionsCount);
     return 0;
-
 }

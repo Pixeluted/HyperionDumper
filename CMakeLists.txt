@@ -7,11 +7,16 @@ add_executable(${PROJECT_NAME} main.cpp
         PEDumper.cpp
         PEDumper.hpp
 
-        Dumper.hpp)
+        Dumper.hpp
+        Dissassembler.cpp
+        Dissassembler.hpp)
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/capstone")
+option(ZYDIS_BUILD_TOOLS "" OFF)
+option(ZYDIS_BUILD_EXAMPLES "" OFF)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Dependencies/zydis")
+
 target_include_directories(${PROJECT_NAME} PRIVATE "Dependencies")
 
-target_link_libraries(${PROJECT_NAME} PUBLIC
-        capstone
+target_link_libraries(${PROJECT_NAME} PRIVATE
+        Zydis
 )
