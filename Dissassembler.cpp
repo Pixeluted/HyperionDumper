@@ -27,5 +27,12 @@ void Dissassembler::PrintOutInstruction(const std::shared_ptr<DecodedInstruction
                                     sizeof(instructionBuffer), instruction->originalMemoryAddress, ZYAN_NULL);
 
     spdlog::info("0x{0:x}: {1}", instruction->originalMemoryAddress, instructionBuffer);
+}
 
+uintptr_t Dissassembler::ResolveRIPRelativeInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
+    const auto displacement = instruction->operands[1].mem.disp.value;
+    const auto nextInstructionAddress = instruction->originalMemoryAddress + instruction->instruction->length;
+    const auto targetAddress = nextInstructionAddress + displacement;
+
+    return targetAddress;
 }

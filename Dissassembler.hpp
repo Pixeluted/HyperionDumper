@@ -33,7 +33,7 @@ public:
      * @param bufferAddress The start address of the buffer in our process
      * @param bufferSize The size of the buffer
      * @param perInstructionCallback The function that should be called on each instruction
-     * @param dllBase The address base that will be used instead of our process addresses (defaults to bufferAddress)
+     * @param dumperInfo The dumper info so we can calculate offsets from dll base and original memory address
      */
     template<typename T>
     void DissassembleInstructions(const uintptr_t bufferAddress, const size_t bufferSize, T perInstructionCallback,
@@ -71,5 +71,16 @@ public:
         } while (currentStatus != ZYDIS_STATUS_NO_MORE_DATA && (bufferSize - currentBufferOffset) > 0);
     }
 
+    /**
+     * @brief Prints the instruction out to console
+     * @param instruction The instruction to print
+     */
     void PrintOutInstruction(const std::shared_ptr<DecodedInstruction> &instruction) const;
+
+    /**
+     * @brief Resolves RIP relative moves, or in other words PIC (Position Independent Code)
+     * @param instruction The instruction that has RIP + offset operand as second operand
+     * @return The resolved address
+     */
+    uintptr_t ResolveRIPRelativeInstruction(const std::shared_ptr<DecodedInstruction> &instruction);
 };
