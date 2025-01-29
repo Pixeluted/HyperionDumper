@@ -12,6 +12,11 @@ struct BaseAnalyzerState {
     virtual ~BaseAnalyzerState() = default;
 };
 
+struct MatcherResult {
+    bool hasMatched = false;
+    int nextProgressState = -1;
+};
+
 template<typename T>
 concept DerivedFromBaseAnalyzerState = std::is_base_of_v<BaseAnalyzerState, T>;
 
@@ -20,7 +25,7 @@ template<typename StateType>
 class PatternAnalyzer {
 public:
     StateType currentAnalyzerState;
-    using PatternMatcher = bool(*)(const std::shared_ptr<DecodedInstruction>& instruction, StateType& analyzerState);
+    using PatternMatcher = MatcherResult(*)(const std::shared_ptr<DecodedInstruction>& instruction, StateType& analyzerState);
 protected:
     virtual const std::pair<int, PatternMatcher>* getPatterns() const = 0;
     [[nodiscard]] virtual size_t getPatternsCount() const = 0; // This must return the last patter matcher state number
@@ -38,10 +43,18 @@ public:
 
         for (size_t i = 0; i < patternsCount; i++) {
             const auto& [progress, matcher] = allPatterns[i];
-            if (progress == currentAnalyzerState.currentProgress && matcher(instruction, currentAnalyzerState)) {
-                ++currentAnalyzerState.currentProgress;
-                hasMatched = true;
-                break;
+            if (progress == currentAnalyzerState.currentProgress) {
+                const auto matcherResults = matcher(instruction, currentAnalyzerState);
+                if (matcherResults.hasMatched && matcherResults.nextProgressState == -1) {
+                    ++currentAnalyzerState.currentProgress;
+                    hasMatched = true;
+                    break;
+                }
+                if (matcherResults.hasMatched && matcherResults.nextProgressState != -1) {
+                    currentAnalyzerState.currentProgress = matcherResults.nextProgressState;
+                    hasMatched = true;
+                    break;
+                }
             }
         }
 

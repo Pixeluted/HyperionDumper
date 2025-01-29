@@ -48,6 +48,11 @@ bool IsJumpInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
 bool WillStackOpaquePredicateJump(const StackOpaqueAnalyzerState &analyzerState) {
     switch (analyzerState.jumpInstruction->instruction->mnemonic) {
         case ZYDIS_MNEMONIC_JZ:
+            if (analyzerState.compareInstruction->instruction->mnemonic == ZYDIS_MNEMONIC_TEST) {
+                if (analyzerState.comparedAgainst == 1) {
+                    return (analyzerState.stackValue & 1) == 0;
+                }
+            }
             return analyzerState.stackValue == analyzerState.comparedAgainst;
         case ZYDIS_MNEMONIC_JNZ:
             return analyzerState.stackValue != analyzerState.comparedAgainst;
@@ -133,10 +138,10 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                         analyzerState.moveValueToStackInstruction = instruction;
                         analyzerState.stackOffset = instruction->operands[0].mem.disp.value;
                         analyzerState.stackValue = instruction->operands[1].imm.value.u;
-                        return true;
+                        return MatcherResult{true};
                     }
 
-                    return false;
+                    return MatcherResult{false};
                 }
             },
 
@@ -145,9 +150,9 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                     if (IsMoveStackValueToRegisterInstruction(instruction, analyzerState)) {
                         analyzerState.moveStackValueToRegisterInstruction = instruction;
                         analyzerState.firstCompareRegister = instruction->operands[0].reg.value;
-                        return true;
+                        return MatcherResult{true};
                     }
-                    return false;
+                    return MatcherResult{false};
                 }
             },
 
@@ -156,9 +161,9 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                     if (IsCompareValuesInstruction(instruction, analyzerState)) {
                         analyzerState.compareInstruction = instruction;
                         analyzerState.comparedAgainst = instruction->operands[1].imm.value.u;
-                        return true;
+                        return MatcherResult{true};
                     }
-                    return false;
+                    return MatcherResult{false};
                 }
             },
 
@@ -166,9 +171,9 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                 3, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
                     if (IsJumpInstruction(instruction)) {
                         analyzerState.jumpInstruction = instruction;
-                        return true;
+                        return MatcherResult{true};
                     }
-                    return false;
+                    return MatcherResult{false};
                 }
             },
         };
