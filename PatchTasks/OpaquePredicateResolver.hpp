@@ -23,7 +23,7 @@ struct StackOpaqueAnalyzerState : BaseAnalyzerState {
     std::shared_ptr<DecodedInstruction> jumpInstruction;
 };
 
-class StackOpaqueAnalyzer : public PatternAnalyzer<StackOpaqueAnalyzerState> {
+class StackOpaqueAnalyzer final : public PatternAnalyzer<StackOpaqueAnalyzerState> {
     [[nodiscard]] size_t getPatternsCount() const override;
     [[nodiscard]] size_t getFinalProgress() const override;
     [[nodiscard]] const std::pair<int, PatternMatcher> *getPatterns() const override;

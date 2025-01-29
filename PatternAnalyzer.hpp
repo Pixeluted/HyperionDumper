@@ -29,6 +29,7 @@ protected:
 
 public:
     PatternAnalyzer(): currentAnalyzerState(StateType{}) {}
+    virtual ~PatternAnalyzer() = default;
 
     void analyzeInstruction(const std::shared_ptr<DecodedInstruction>& instruction, const bool isRecheck = false) {
         bool hasMatched = false;
