@@ -12,13 +12,13 @@ struct StackOpaqueAnalyzerState : BaseAnalyzerState {
 
     std::shared_ptr<DecodedInstruction> moveValueToStackInstruction;
     int64_t stackOffset;
-    uint64_t stackValue;
+    ZydisDecodedOperandImm::ZydisDecodedOperandImmValue_ stackValue;
 
     std::shared_ptr<DecodedInstruction> moveStackValueToRegisterInstruction;
     ZydisRegister firstCompareRegister;
 
     std::shared_ptr<DecodedInstruction> compareInstruction;
-    uint64_t comparedAgainst;
+    ZydisDecodedOperandImm::ZydisDecodedOperandImmValue_ comparedAgainst;
 
     std::shared_ptr<DecodedInstruction> jumpInstruction;
 };
