@@ -9,7 +9,9 @@ add_executable(${PROJECT_NAME} main.cpp
 
         Dumper.hpp
         Dissassembler.cpp
-        Dissassembler.hpp)
+        Dissassembler.hpp
+        PatchTasks/OpaquePredicateResolver.cpp
+        PatchTasks/OpaquePredicateResolver.hpp)
 
 option(ZYDIS_BUILD_TOOLS "" OFF)
 option(ZYDIS_BUILD_EXAMPLES "" OFF)

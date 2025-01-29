@@ -5,9 +5,13 @@
 #include <memory>
 #include <Zydis/Zydis.h>
 
+#include "PEDumper.hpp"
+#include "Dumper.hpp"
+
+
 struct DecodedInstruction {
-    ZydisDecodedInstruction instruction;
-    ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
+    std::shared_ptr<ZydisDecodedInstruction> instruction;
+    std::shared_ptr<ZydisDecodedOperand[ZYDIS_MAX_OPERAND_COUNT]> operands;
     uintptr_t offsetFromDllBase;
 };
 
@@ -28,10 +32,11 @@ public:
      * @param bufferAddress The start address of the buffer in our process
      * @param bufferSize The size of the buffer
      * @param perInstructionCallback The function that should be called on each instruction
-     * @param inferredAddress The address base that will be used instead of our process addresses (defaults to bufferAddress)
+     * @param dllBase The address base that will be used instead of our process addresses (defaults to bufferAddress)
      */
     template<typename T>
-    void DissassembleInstructions(const uintptr_t bufferAddress, const size_t bufferSize, T perInstructionCallback, const uintptr_t inferredAddress = bufferAddress) {
+    void DissassembleInstructions(const uintptr_t bufferAddress, const size_t bufferSize, T perInstructionCallback,
+                                  const DumperInfo &dumperInfo) {
         size_t currentBufferOffset = 0;
         ZydisDecodedInstruction currentInstruction;
         ZydisDecodedOperand currentOperands[ZYDIS_MAX_OPERAND_COUNT];
@@ -43,12 +48,20 @@ public:
                                                    bufferSize - currentBufferOffset, &currentInstruction,
                                                    currentOperands);
             if (ZYAN_SUCCESS(currentStatus)) {
-                auto fullInstruction = DecodedInstruction{};
-                fullInstruction.instruction = currentInstruction;
-                fullInstruction.offsetFromDllBase = currentBufferOffset;
-                memcpy(fullInstruction.operands, currentOperands, sizeof(currentOperands));
+                auto fullInstruction = std::make_shared<DecodedInstruction>();
+                fullInstruction->instruction = std::make_shared<ZydisDecodedInstruction>(currentInstruction);
+                fullInstruction->operands = std::make_shared_for_overwrite<ZydisDecodedOperand[10]>();
+                fullInstruction->offsetFromDllBase =
+                        (dumperInfo
+                         .DumpInfo->DllBase + dumperInfo.DumpInfo->CodeSectionInfo.codeSectionStartOffset +
+                         currentBufferOffset) - dumperInfo
+                        .DumpInfo->DllBase;
+                memcpy(fullInstruction->operands.get(), currentOperands,
+                       sizeof(ZydisDecodedOperand) * ZYDIS_MAX_OPERAND_COUNT);
 
-                perInstructionCallback(fullInstruction, inferredAddress + currentBufferOffset);
+                perInstructionCallback(fullInstruction, dumperInfo
+                                                        .DumpInfo->DllBase + dumperInfo.DumpInfo->CodeSectionInfo.
+                                                        codeSectionStartOffset + currentBufferOffset);
 
                 currentBufferOffset += currentInstruction.length;
             } else {
@@ -57,5 +70,5 @@ public:
         } while (currentStatus != ZYDIS_STATUS_NO_MORE_DATA && (bufferSize - currentBufferOffset) > 0);
     }
 
-    void PrintOutInstruction(const DecodedInstruction& instruction, const uintptr_t instructionAddress);
+    void PrintOutInstruction(const DecodedInstruction &instruction, const uintptr_t instructionAddress);
 };

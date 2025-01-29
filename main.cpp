@@ -6,8 +6,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Dissassembler.hpp"
-#include "Dumper.hpp"
-#include "PEDumper.hpp"
+#include "PatchTasks/OpaquePredicateResolver.hpp"
 
 std::optional<HANDLE> GetProcessHandleByName(const std::string &processName) {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -55,9 +54,12 @@ int main() {
     size_t instructionsCount = 0;
     disassembler->DissassembleInstructions(
         reinterpret_cast<uintptr_t>(dumpResults.ImageBuffer.get() + dumpResults.CodeSectionInfo.codeSectionStartOffset),
-        dumpResults.CodeSectionInfo.codeSectionSize, [&disassembler, &instructionsCount](const DecodedInstruction& instruction, const uintptr_t runtimeAddress) {
+        dumpResults.CodeSectionInfo.codeSectionSize,
+        [&disassembler, &instructionsCount](const std::shared_ptr<DecodedInstruction> &instruction,
+                                            const uintptr_t runtimeAddress) {
             instructionsCount += 1;
-        }, dumpResults.DllBase + dumpResults.CodeSectionInfo.codeSectionStartOffset);
+            AnalyzeInstructionForOpaquePredicates(instruction);
+        }, dumperInfo);
 
     spdlog::info("Found {0} instructions", instructionsCount);
     return 0;
