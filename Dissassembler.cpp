@@ -20,13 +20,12 @@ Dissassembler::Dissassembler(): zydisDecoder(ZydisDecoder{}), zydisFormatter(Zyd
     ZydisFormatterInit(&zydisFormatter, ZYDIS_FORMATTER_STYLE_INTEL);
 }
 
-void Dissassembler::PrintOutInstruction(const DecodedInstruction &instruction, const uintptr_t instructionAddress) {
-    /**
+void Dissassembler::PrintOutInstruction(const std::shared_ptr<DecodedInstruction> &instruction) const {
     char instructionBuffer[256];
-    ZydisFormatterFormatInstruction(&zydisFormatter, &instruction.instruction.get(), instruction.operands,
-                                    instruction.instruction.operand_count_visible, instructionBuffer,
-                                    sizeof(instructionBuffer), instructionAddress, ZYAN_NULL);
+    ZydisFormatterFormatInstruction(&zydisFormatter, instruction->instruction.get(), instruction->operands.get(),
+                                    instruction->instruction->operand_count_visible, instructionBuffer,
+                                    sizeof(instructionBuffer), instruction->originalMemoryAddress, ZYAN_NULL);
 
-    spdlog::info("0x{0:x}: {1}", instructionAddress, instructionBuffer);
-    */
+    spdlog::info("0x{0:x}: {1}", instruction->originalMemoryAddress, instructionBuffer);
+
 }
