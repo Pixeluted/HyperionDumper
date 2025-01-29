@@ -24,8 +24,8 @@ struct StackOpaqueAnalyzerState : BaseAnalyzerState {
 };
 
 class StackOpaqueAnalyzer : public PatternAnalyzer<StackOpaqueAnalyzerState> {
-
     [[nodiscard]] size_t getPatternsCount() const override;
+    [[nodiscard]] size_t getFinalProgress() const override;
     [[nodiscard]] const std::pair<int, PatternMatcher> *getPatterns() const override;
     void onPatternMatched() override;
 };

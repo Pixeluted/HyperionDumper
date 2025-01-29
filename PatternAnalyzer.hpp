@@ -24,6 +24,7 @@ public:
 protected:
     virtual const std::pair<int, PatternMatcher>* getPatterns() const = 0;
     [[nodiscard]] virtual size_t getPatternsCount() const = 0; // This must return the last patter matcher state number
+    [[nodiscard]] virtual size_t getFinalProgress() const = 0;
     virtual void onPatternMatched() = 0;
 
 public:
@@ -51,7 +52,7 @@ public:
             return;
         }
 
-        if ((currentAnalyzerState.currentProgress + 1) > patternsCount) {
+        if (getFinalProgress() == currentAnalyzerState.currentProgress) {
             onPatternMatched();
             currentAnalyzerState.currentProgress = 0;
         }

@@ -182,11 +182,16 @@ size_t StackOpaqueAnalyzer::getPatternsCount() const {
     return 3;
 }
 
+size_t StackOpaqueAnalyzer::getFinalProgress() const {
+    return 4;
+}
+
 void StackOpaqueAnalyzer::onPatternMatched() {
     ResolveStackOpaquePredicate(currentAnalyzerState);
 }
 
 static auto stackOpaqueAnalyzer = StackOpaqueAnalyzer();
+
 void AnalyzeInstructionForOpaquePredicates(const std::shared_ptr<DecodedInstruction> &instruction) {
     stackOpaqueAnalyzer.analyzeInstruction(instruction);
 }
