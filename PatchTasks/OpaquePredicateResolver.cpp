@@ -180,9 +180,6 @@ void ResolveStackOpaquePredicate(StackOpaqueAnalyzerState &analyzerState) {
     }
 
     analyzerState.resolvedOpaquePredicates += 1;
-    if (analyzerState.moveValueToStackInstruction->instruction->mnemonic == ZYDIS_MNEMONIC_LEA) {
-        spdlog::info("Resolved LEA at 0x{0:x}", analyzerState.moveValueToStackInstruction->offsetFromDllBase);
-    }
 }
 
 static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::PatternMatcher> stackOpaqueAnalyzerPatterns[]
