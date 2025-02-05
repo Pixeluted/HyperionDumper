@@ -51,13 +51,11 @@ int main() {
     dumperInfo.RobloxHandle = robloxHandle;
 
     const auto disassembler = Dissassembler::GetSingleton();
-    size_t instructionsCount = 0;
     disassembler->DissassembleInstructions(
         reinterpret_cast<uintptr_t>(dumpResults.ImageBuffer.get() + dumpResults.CodeSectionInfo.codeSectionStartOffset),
         dumpResults.CodeSectionInfo.codeSectionSize,
-        [&disassembler, &instructionsCount](const std::shared_ptr<DecodedInstruction> &instruction,
+        [](const std::shared_ptr<DecodedInstruction> &instruction,
                                             const uintptr_t runtimeAddress) {
-            instructionsCount += 1;
             AnalyzeInstructionForOpaquePredicates(instruction);
         }, dumperInfo);
 
