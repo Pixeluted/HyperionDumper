@@ -43,12 +43,35 @@ bool IsCompareValuesInstruction(const std::shared_ptr<DecodedInstruction> &instr
 }
 
 bool IsCompareValuesImmediatelyInstruction(const std::shared_ptr<DecodedInstruction> &instruction,
-                                const StackOpaqueAnalyzerState &analyzerState) {
+                                           const StackOpaqueAnalyzerState &analyzerState) {
     return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_CMP &&
            instruction->operands[0].type == ZYDIS_OPERAND_TYPE_MEMORY &&
            instruction->operands[0].mem.base == analyzerState.moveValueToStackInstruction->operands[0].mem.base &&
            instruction->operands[0].mem.disp.value == analyzerState.stackOffset &&
            instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
+}
+
+bool IsLeaRelativeAddressIntoRegister(const std::shared_ptr<DecodedInstruction> &instruction) {
+    return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_LEA &&
+           instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+           instruction->operands[1].type == ZYDIS_OPERAND_TYPE_MEMORY &&
+           instruction->operands[1].mem.base == ZYDIS_REGISTER_RIP &&
+           instruction->operands[1].mem.disp.value != 0;
+}
+
+bool IsMoveImmediateValueIntoRegister(const std::shared_ptr<DecodedInstruction> &instruction) {
+    return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_MOV &&
+           instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+           instruction->operands[1].type == ZYDIS_OPERAND_TYPE_IMMEDIATE;
+}
+
+bool IsCompareTwoRegistersInstruction(const std::shared_ptr<DecodedInstruction> &instruction,
+                                      const StackOpaqueAnalyzerState &analyzerState) {
+    return instruction->instruction->mnemonic == ZYDIS_MNEMONIC_CMP &&
+           instruction->operands[0].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+           instruction->operands[0].reg.value == analyzerState.firstCompareRegister &&
+           instruction->operands[1].type == ZYDIS_OPERAND_TYPE_REGISTER &&
+           instruction->operands[1].reg.value == analyzerState.secondCompareRegister;
 }
 
 bool IsJumpInstruction(const std::shared_ptr<DecodedInstruction> &instruction) {
@@ -110,7 +133,7 @@ void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) 
                 };
                 memcpy(buffer, newJump, sizeof(newJump));
 
-                spdlog::info("Resolved opaque predicate at 0x{0:x} with short relative jump patch!",
+                spdlog::debug("Resolved opaque predicate at 0x{0:x} with short relative jump patch!",
                              analyzerState.jumpInstruction->offsetFromDllBase);
             } else if (targetAddress.size == 32) {
                 memset(buffer, 0x90, originalLength);
@@ -123,7 +146,7 @@ void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) 
                 };
                 memcpy(buffer, newJump, sizeof(newJump));
 
-                spdlog::info("Resolved opaque predicate at 0x{0:x} with near relative jump patch!",
+                spdlog::debug("Resolved opaque predicate at 0x{0:x} with near relative jump patch!",
                              analyzerState.jumpInstruction->offsetFromDllBase);
             } else if (targetAddress.size == 64) {
                 memset(buffer, 0x90, originalLength);
@@ -140,7 +163,7 @@ void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) 
                 };
                 memcpy(buffer, newJump, sizeof(newJump));
 
-                spdlog::info("Resolved opaque predicate at 0x{0:x} with absolute jump patch!",
+                spdlog::debug("Resolved opaque predicate at 0x{0:x} with absolute jump patch!",
                              analyzerState.jumpInstruction->offsetFromDllBase);
             }
         }
@@ -149,7 +172,7 @@ void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) 
             analyzerState.jumpInstruction->dumpInfo->DumpInfo->ImageBuffer.get() +
             analyzerState.jumpInstruction->offsetFromDllBase, 0x90,
             originalLength);
-        spdlog::info("Resolved opaque predicate at 0x{0:x} by nopping out the jump!",
+        spdlog::debug("Resolved opaque predicate at 0x{0:x} by nopping out the jump!",
                      analyzerState.jumpInstruction->offsetFromDllBase);
     }
 }
@@ -165,6 +188,21 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                         return MatcherResult{true};
                     }
 
+                    return MatcherResult{false};
+                }
+            },
+            {
+                0, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsLeaRelativeAddressIntoRegister(instruction)) {
+                        const auto loadedConstant = Dissassembler::ResolveRIPRelativeInstruction(instruction);
+                        auto newZydisValue = ZydisDecodedOperandImm::ZydisDecodedOperandImmValue_{};
+                        newZydisValue.u = loadedConstant;
+                        newZydisValue.s = static_cast<intptr_t>(loadedConstant);
+                        analyzerState.stackValue = newZydisValue;
+                        analyzerState.moveValueToStackInstruction = instruction;
+                        analyzerState.firstCompareRegister = instruction->operands[0].reg.value;
+                        return MatcherResult{true};
+                    }
                     return MatcherResult{false};
                 }
             },
@@ -199,12 +237,31 @@ static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::Patte
                     return MatcherResult{false};
                 }
             },
+            {
+                1, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsMoveImmediateValueIntoRegister(instruction)) {
+                        analyzerState.comparedAgainst = instruction->operands[1].imm.value;
+                        analyzerState.secondCompareRegister = instruction->operands[0].reg.value;
+                        return MatcherResult{true};
+                    }
+                    return MatcherResult{false};
+                }
+            },
 
             {
                 2, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
                     if (IsCompareValuesInstruction(instruction, analyzerState)) {
                         analyzerState.compareInstruction = instruction;
                         analyzerState.comparedAgainst = instruction->operands[1].imm.value;
+                        return MatcherResult{true};
+                    }
+                    return MatcherResult{false};
+                }
+            },
+            {
+                2, [](const std::shared_ptr<DecodedInstruction> &instruction, StackOpaqueAnalyzerState &analyzerState) {
+                    if (IsCompareTwoRegistersInstruction(instruction, analyzerState)) {
+                        analyzerState.compareInstruction = instruction;
                         return MatcherResult{true};
                     }
                     return MatcherResult{false};
@@ -228,7 +285,7 @@ StackOpaqueAnalyzer::getPatterns() const {
 }
 
 size_t StackOpaqueAnalyzer::getPatternsCount() const {
-    return 5;
+    return 8;
 }
 
 size_t StackOpaqueAnalyzer::getFinalProgress() const {

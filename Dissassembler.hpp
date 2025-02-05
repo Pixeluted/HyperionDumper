@@ -86,5 +86,5 @@ public:
      * @param instruction The instruction that has RIP + offset operand as second operand
      * @return The resolved address
      */
-    uintptr_t ResolveRIPRelativeInstruction(const std::shared_ptr<DecodedInstruction> &instruction);
+    static uintptr_t ResolveRIPRelativeInstruction(const std::shared_ptr<DecodedInstruction> &instruction);
 };

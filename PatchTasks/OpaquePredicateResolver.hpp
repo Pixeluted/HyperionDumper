@@ -16,6 +16,7 @@ struct StackOpaqueAnalyzerState : BaseAnalyzerState {
 
     std::shared_ptr<DecodedInstruction> moveStackValueToRegisterInstruction;
     ZydisRegister firstCompareRegister;
+    ZydisRegister secondCompareRegister;
 
     std::shared_ptr<DecodedInstruction> compareInstruction;
     ZydisDecodedOperandImm::ZydisDecodedOperandImmValue_ comparedAgainst;
