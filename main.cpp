@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iostream>
 #include <Windows.h>
 #include <psapi.h>
 #include <optional>
@@ -66,6 +67,7 @@ int main() {
     file.close();
 
     spdlog::info("Wrote to dump.bin");
-
+    spdlog::info("Press enter to exit...");
+    std::cin.get();
     return 0;
 }
