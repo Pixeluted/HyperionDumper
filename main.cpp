@@ -59,6 +59,8 @@ int main() {
             AnalyzeInstructionForOpaquePredicates(instruction);
         }, dumperInfo);
 
+    spdlog::info("Resolved {} opaque predicates!", GetAmountOfResolvedOpaquePredicates());
+
     std::ofstream file("dump.bin", std::ios::binary);
     file.write(reinterpret_cast<const char*>(dumpResults.ImageBuffer.get()), dumpResults.ImageSize);
     file.close();

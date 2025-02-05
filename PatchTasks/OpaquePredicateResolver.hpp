@@ -22,6 +22,9 @@ struct StackOpaqueAnalyzerState : BaseAnalyzerState {
     ZydisDecodedOperandImm::ZydisDecodedOperandImmValue_ comparedAgainst;
 
     std::shared_ptr<DecodedInstruction> jumpInstruction;
+
+    // Stats
+    uint32_t resolvedOpaquePredicates = 0;
 };
 
 class StackOpaqueAnalyzer final : public PatternAnalyzer<StackOpaqueAnalyzerState> {
@@ -32,3 +35,4 @@ class StackOpaqueAnalyzer final : public PatternAnalyzer<StackOpaqueAnalyzerStat
 };
 
 void AnalyzeInstructionForOpaquePredicates(const std::shared_ptr<DecodedInstruction> &instruction);
+uint32_t GetAmountOfResolvedOpaquePredicates();

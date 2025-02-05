@@ -116,7 +116,7 @@ bool WillStackOpaquePredicateJump(const StackOpaqueAnalyzerState &analyzerState)
     }
 }
 
-void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) {
+void ResolveStackOpaquePredicate(StackOpaqueAnalyzerState &analyzerState) {
     const auto originalLength = analyzerState.jumpInstruction->instruction->length;
 
     const auto willJump = WillStackOpaquePredicateJump(analyzerState);
@@ -175,6 +175,8 @@ void ResolveStackOpaquePredicate(const StackOpaqueAnalyzerState &analyzerState) 
         spdlog::debug("Resolved opaque predicate at 0x{0:x} by nopping out the jump!",
                      analyzerState.jumpInstruction->offsetFromDllBase);
     }
+
+    analyzerState.resolvedOpaquePredicates += 1;
 }
 
 static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::PatternMatcher> stackOpaqueAnalyzerPatterns[]
@@ -300,4 +302,8 @@ static auto stackOpaqueAnalyzer = StackOpaqueAnalyzer();
 
 void AnalyzeInstructionForOpaquePredicates(const std::shared_ptr<DecodedInstruction> &instruction) {
     stackOpaqueAnalyzer.analyzeInstruction(instruction);
+}
+
+uint32_t GetAmountOfResolvedOpaquePredicates() {
+    return stackOpaqueAnalyzer.currentAnalyzerState.resolvedOpaquePredicates;
 }
