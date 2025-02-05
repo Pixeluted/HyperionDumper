@@ -97,6 +97,9 @@ bool WillStackOpaquePredicateJump(const StackOpaqueAnalyzerState &analyzerState)
             }
             return analyzerState.stackValue.u == analyzerState.comparedAgainst.u;
         case ZYDIS_MNEMONIC_JNZ:
+            if (analyzerState.compareInstruction->instruction->mnemonic == ZYDIS_MNEMONIC_TEST) {
+                return (analyzerState.stackValue.u & analyzerState.comparedAgainst.u) != 0;
+            }
             return analyzerState.stackValue.u != analyzerState.comparedAgainst.u;
         case ZYDIS_MNEMONIC_JNBE:
             return analyzerState.stackValue.u > analyzerState.comparedAgainst.u;
@@ -177,6 +180,9 @@ void ResolveStackOpaquePredicate(StackOpaqueAnalyzerState &analyzerState) {
     }
 
     analyzerState.resolvedOpaquePredicates += 1;
+    if (analyzerState.moveValueToStackInstruction->instruction->mnemonic == ZYDIS_MNEMONIC_LEA) {
+        spdlog::info("Resolved LEA at 0x{0:x}", analyzerState.moveValueToStackInstruction->offsetFromDllBase);
+    }
 }
 
 static constexpr std::pair<int, PatternAnalyzer<StackOpaqueAnalyzerState>::PatternMatcher> stackOpaqueAnalyzerPatterns[]
