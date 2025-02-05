@@ -37,12 +37,16 @@ int main() {
     const auto robloxHandleOpt = GetProcessHandleByName("RobloxPlayerBeta.exe");
     if (!robloxHandleOpt.has_value()) {
         spdlog::error("Roblox isn't open, or we failed to obtain a handle!");
+        spdlog::info("Press enter to exit...");
+        std::cin.get();
         return -1;
     }
     const auto robloxHandle = robloxHandleOpt.value();
     const auto _dumpResultsOpt = DumpModule(robloxHandle, "RobloxPlayerBeta.dll", ".byfron");
     if (!_dumpResultsOpt.has_value()) {
         spdlog::error("Failed to dump hyperion module!");
+        spdlog::info("Press enter to exit...");
+        std::cin.get();
         return -1;
     }
     auto dumpResults = _dumpResultsOpt.value();
